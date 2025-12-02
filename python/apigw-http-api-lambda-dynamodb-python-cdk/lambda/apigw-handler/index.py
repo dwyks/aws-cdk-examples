@@ -11,6 +11,7 @@ import os
 import json
 import logging
 import uuid
+from datetime import datetime
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -18,19 +19,48 @@ logger.setLevel(logging.INFO)
 dynamodb_client = boto3.client("dynamodb")
 
 
+def log_event(level, message, **kwargs):
+    """Structured logging helper for security and operational visibility"""
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "level": level,
+        "message": message,
+        **kwargs
+    }
+    logger.info(json.dumps(log_entry))
+
+
 def handler(event, context):
     table = os.environ.get("TABLE_NAME")
-    logging.info(f"## Loaded table name from environemt variable DDB_TABLE: {table}")
+    request_id = context.request_id
+    source_ip = event.get("requestContext", {}).get("identity", {}).get("sourceIp", "unknown")
+    
+    log_event("INFO", "Processing request", 
+              request_id=request_id, 
+              source_ip=source_ip,
+              table_name=table)
+    
     if event["body"]:
         item = json.loads(event["body"])
-        logging.info(f"## Received payload: {item}")
+        log_event("INFO", "Received payload", 
+                  request_id=request_id,
+                  source_ip=source_ip,
+                  item_id=item.get("id"))
+        
         year = str(item["year"])
         title = str(item["title"])
         id = str(item["id"])
+        
         dynamodb_client.put_item(
             TableName=table,
             Item={"year": {"N": year}, "title": {"S": title}, "id": {"S": id}},
         )
+        
+        log_event("INFO", "Successfully inserted data",
+                  request_id=request_id,
+                  source_ip=source_ip,
+                  item_id=id)
+        
         message = "Successfully inserted data!"
         return {
             "statusCode": 200,
@@ -38,15 +68,25 @@ def handler(event, context):
             "body": json.dumps({"message": message}),
         }
     else:
-        logging.info("## Received request without a payload")
+        log_event("INFO", "Received request without payload, using default data",
+                  request_id=request_id,
+                  source_ip=source_ip)
+        
+        default_id = str(uuid.uuid4())
         dynamodb_client.put_item(
             TableName=table,
             Item={
                 "year": {"N": "2012"},
                 "title": {"S": "The Amazing Spider-Man 2"},
-                "id": {"S": str(uuid.uuid4())},
+                "id": {"S": default_id},
             },
         )
+        
+        log_event("INFO", "Successfully inserted default data",
+                  request_id=request_id,
+                  source_ip=source_ip,
+                  item_id=default_id)
+        
         message = "Successfully inserted data!"
         return {
             "statusCode": 200,
