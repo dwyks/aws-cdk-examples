@@ -85,6 +85,33 @@ You should get below response
 {"message": "Successfully inserted data!"}
 ```
 
+## Security Logging
+
+### CloudWatch Logs
+This stack configures comprehensive logging for security and operational visibility:
+
+- **Lambda Function Logs**: Automatically sent to CloudWatch Logs with 1-year retention
+- **API Gateway Access Logs**: Captures request metadata including caller identity, source IP, timestamps, and response status
+- **Structured Logging**: Lambda function uses JSON-formatted logs for efficient querying in CloudWatch Logs Insights
+
+### CloudTrail Data Events
+To enable CloudTrail data events for DynamoDB table access logging:
+
+1. Create or configure a CloudTrail trail with data events enabled
+2. Add the DynamoDB table ARN to the trail's data event selectors
+3. Ensure logs are sent to a secure S3 bucket with appropriate retention
+
+This enables tracking of all PutItem, GetItem, and other data plane operations for security investigations and compliance audits.
+
+### Querying Logs
+Use CloudWatch Logs Insights to query structured logs:
+
+```
+fields @timestamp, message, request_id, source_ip, item_id
+| filter level = "INFO"
+| sort @timestamp desc
+```
+
 ## Cleanup 
 Run below script to delete AWS resources created by this sample stack.
 ```
